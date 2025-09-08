@@ -1,9 +1,19 @@
+---
+title: diaryx-cli
+author: Adam Harris
+created: 2025-09-08T12:00:00-6:00
+updated: 2025-09-08T13:07:013-6:00
+visibility: public
+format: "[CommonMark (Markdown)](https://spec.commonmark.org/0.31.2/)"
+version: v0.2.0-alpha
+---
+
 # diaryx-cli
 
 `diaryx-cli` is a Rust command‑line tool for turning Diaryx-formatted Markdown files into a small static HTML site.  
 It works on a *single entry file* (a Diaryx file). If that file is a **root index** (`this_file_is_root_index: true`), it recursively traverses the `contents` lists of index files it references to build a multi-page site. Otherwise it produces a single-page site for just that file (plus its local attachments).
 
-This is an early MVP focusing on the `build` subcommand. Additional subcommands (like `schema`, `validate`, and `watch`) can be layered in later.
+This is an early MVP focusing on the `build` subcommand. Additional subcommands (like `import`, `validate`, and `watch`) can be layered in later.
 
 ---
 
@@ -250,7 +260,7 @@ Coding guidelines:
 
 ## License
 
-The CLI source code (unless stated otherwise) is released under the license declared in `Cargo.toml` (currently CC-BY-SA-4.0 — may revisit for code vs. spec text separation).  
+The CLI source code (unless stated otherwise) is released under the license declared in `Cargo.toml` (currently MIT — may revisit for code vs. spec text separation).  
 The Diaryx specification text it processes may have its own license declared via the `copying` field; the tool does not alter or remove those notices—ensure compliance when publishing.
 
 ---
@@ -266,9 +276,6 @@ A: Not yet. Only presence of basic required fields triggers warnings. A future `
 Q: Why start with a simplistic template instead of a templating engine?  
 A: Fast bootstrap; once the data model stabilizes we can swap to a template engine (e.g. MiniJinja) without breaking user workflows.
 
-Q: Will links inside body Markdown automatically point to generated HTML pages?  
-A: Not in the MVP. That comes in the internal link rewriting milestone.
-
 ---
 
 ## Support / Feedback
@@ -281,4 +288,4 @@ Open an issue with:
 
 ---
 
-Happy writing & preserving your entries with Diaryx!
+Happy writing!
