@@ -1,7 +1,7 @@
 [package]
 name = "diaryx-cli"
-version = "v0.1.0-alpha"
-edition = "2025"
+version = "0.1.0-alpha"
+edition = "2024"
 license = "MIT"
 description = "A command line interface (CLI) for handling Diaryx-formatted files"
 repository = "https://github.com/adammharris/diaryx-cli/tree/main" # update later
