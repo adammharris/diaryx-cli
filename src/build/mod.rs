@@ -27,9 +27,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use regex::Regex;
 use serde::Deserialize;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static WARNING_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 use crate::BuildOptions;
 
@@ -63,6 +66,25 @@ pub fn run_build(opts: BuildOptions) -> Result<()> {
 
     // 5. Emit site
     emit_site(&opts, &docs)?;
+
+    // Strict mode: fail if any warnings were recorded
+    if opts.strict {
+        let wc = WARNING_COUNT.load(Ordering::SeqCst);
+        if wc > 0 {
+            return Err(anyhow!(
+                "Strict mode: build failed due to {} warning(s)",
+                wc
+            ));
+        }
+    }
+
+    // Always print completion line (stdout) including warning count, regardless of verbose.
+    let wc = WARNING_COUNT.load(Ordering::SeqCst);
+    println!(
+        "[diaryx] build completed -> {} (warnings: {})",
+        opts.output.display(),
+        wc
+    );
 
     Ok(())
 }
@@ -141,8 +163,36 @@ fn collect_documents(
             continue;
         }
 
-        let raw = fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read {}", path.display()))?;
+        // Skip non-Markdown files early (prevents attempting to UTF-8 decode images/binaries)
+        if path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| !e.eq_ignore_ascii_case("md"))
+            .unwrap_or(true)
+        {
+            if opts.verbose {
+                eprintln!(
+                    "[info] Skipping non-markdown file in traversal: {}",
+                    path.display()
+                );
+            }
+            continue;
+        }
+
+        // Read file as UTF-8; if it fails (binary or invalid encoding), skip with a warning instead of erroring out.
+        let raw = match fs::read_to_string(&path) {
+            Ok(s) => s,
+            Err(err) => {
+                if opts.verbose {
+                    eprintln!(
+                        "[warn] Skipping file (non-UTF8 or unreadable): {} ({err})",
+                        path.display()
+                    );
+                }
+                WARNING_COUNT.fetch_add(1, Ordering::SeqCst);
+                continue;
+            }
+        };
 
         let split = split_frontmatter(&raw)
             .with_context(|| format!("Failed splitting frontmatter for {}", path.display()))?;
@@ -192,10 +242,13 @@ fn collect_documents(
             warnings,
         };
 
-        if opts.verbose && !doc.warnings.is_empty() {
-            for w in &doc.warnings {
-                eprintln!("[warn] {}: {}", path.display(), w);
+        if !doc.warnings.is_empty() {
+            if opts.verbose {
+                for w in &doc.warnings {
+                    eprintln!("[warn] {}: {}", path.display(), w);
+                }
             }
+            WARNING_COUNT.fetch_add(doc.warnings.len(), Ordering::SeqCst);
         }
 
         let is_index = doc.is_index;
@@ -215,6 +268,7 @@ fn collect_documents(
                         if opts.verbose {
                             eprintln!("[warn] contents target not found: {}", resolved.display());
                         }
+                        WARNING_COUNT.fetch_add(1, Ordering::SeqCst);
                         continue;
                     }
                     if resolved.is_file() {
@@ -552,10 +606,13 @@ fn emit_site(opts: &BuildOptions, docs_all: &[DiaryxDoc]) -> Result<()> {
             .filter(|d| !d.is_public() && d.abs_path != *entry_abs)
             .collect();
         if !excluded.is_empty() {
-            eprintln!(
-                "[warn] excluded {} non-public document(s). Use --include_nonpublic to include them.",
-                excluded.len()
-            );
+            if opts.verbose {
+                eprintln!(
+                    "[warn] excluded {} non-public document(s). Use --include_nonpublic to include them.",
+                    excluded.len()
+                );
+            }
+            WARNING_COUNT.fetch_add(1, Ordering::SeqCst);
         }
     }
 
@@ -1250,10 +1307,13 @@ fn rewrite_internal_links(docs: &mut [DiaryxDoc], opts: &BuildOptions) {
         doc.html = new_html;
     }
 
-    if opts.verbose {
-        for u in unmatched {
-            eprintln!("[warn] Unmatched internal markdown link (left as-is): {u}");
+    if !unmatched.is_empty() {
+        if opts.verbose {
+            for u in &unmatched {
+                eprintln!("[warn] Unmatched internal markdown link (left as-is): {u}");
+            }
         }
+        WARNING_COUNT.fetch_add(unmatched.len(), Ordering::SeqCst);
     }
 }
 

@@ -12,7 +12,7 @@
 
 use std::path::PathBuf;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 mod build;
 
@@ -64,6 +64,10 @@ struct BuildArgs {
     /// Verbose logging (prints warnings/progress to stderr).
     #[arg(long)]
     verbose: bool,
+
+    /// Treat warnings as errors (fail the build if any warning occurs).
+    #[arg(long)]
+    strict: bool,
 }
 
 /// Public-facing build options passed to the build layer.
@@ -76,6 +80,7 @@ pub struct BuildOptions {
     pub emit_json: bool,
     pub flat: bool,
     pub verbose: bool,
+    pub strict: bool,
 }
 
 impl BuildOptions {
@@ -96,6 +101,7 @@ impl BuildOptions {
             emit_json: a.emit_json,
             flat: a.flat,
             verbose: a.verbose,
+            strict: a.strict,
         })
     }
 }
@@ -123,12 +129,13 @@ fn main() -> Result<()> {
             let opts = BuildOptions::from_args(&args)?;
             if opts.verbose {
                 eprintln!(
-                    "[diaryx] Building site\n  input: {}\n  output: {}\n  include_nonpublic: {}\n  emit_json: {}\n  flat: {}",
+                    "[diaryx] Building site\n  input: {}\n  output: {}\n  include_nonpublic: {}\n  emit_json: {}\n  flat: {}\n  strict: {}",
                     opts.input.display(),
                     opts.output.display(),
                     opts.include_nonpublic,
                     opts.emit_json,
-                    opts.flat
+                    opts.flat,
+                    opts.strict
                 );
             }
             // Call into the (to-be-implemented) build system.
