@@ -1,10 +1,10 @@
 [package]
 name = "diaryx-cli"
-version = "0.1.0"
-edition = "2021"
-license = "CC-BY-SA-4.0"
-description = "Diaryx CLI: convert Diaryx Markdown files (single or recursive index) into a static HTML site"
-repository = "https://example.com/your/repo" # update later
+version = "v0.1.0-alpha"
+edition = "2025"
+license = "MIT"
+description = "A command line interface (CLI) for handling Diaryx-formatted files"
+repository = "https://github.com/adammharris/diaryx-cli/tree/main" # update later
 keywords = ["diaryx", "markdown", "static-site", "cli"]
 categories = ["command-line-utilities", "text-processing"]
 readme = "README.md"
