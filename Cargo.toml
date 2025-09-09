@@ -1,6 +1,6 @@
 [package]
 name = "diaryx-cli"
-version = "0.2.0-alpha"
+version = "0.2.1-alpha"
 edition = "2024"
 license = "MIT"
 description = "A command line interface (CLI) for handling Diaryx-formatted files"
@@ -8,6 +8,11 @@ repository = "https://github.com/adammharris/diaryx-cli/tree/main" # update late
 keywords = ["diaryx", "markdown", "static-site", "cli"]
 categories = ["command-line-utilities", "text-processing"]
 readme = "README.md"
+
+[workspace]
+members = [
+    "diaryx-core"
+]
 
 # If you later expose a library API (e.g., for embedding) you can add [lib].
 # For now this is just a binary crate.
@@ -24,14 +29,7 @@ regex = "1"
 markdown = "1"
 time = { version = "0.3", features = ["formatting","parsing"] }
 once_cell = "1"
-
-# Optional future enhancements (commented out for now):
-# walkdir = "2"          # If we reintroduce directory discovery.
-# rayon = "1"            # If we parallelize rendering or parsing.
-# notify = "6"           # If we implement --watch.
-# pulldown-cmark = "0.10" # Alternative Markdown parser if needed.
-# lol_html = "1"         # For post-processing / minification.
-# minijinja = "2"        # For more advanced templating.
+diaryx-core = { path = "diaryx-core" }
 
 [dev-dependencies]
 pretty_assertions = "1"
