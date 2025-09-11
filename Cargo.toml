@@ -1,10 +1,10 @@
 [package]
 name = "diaryx-cli"
-version = "0.2.1-alpha"
+version = "0.3.0-alpha"
 edition = "2024"
 license = "MIT"
-description = "A command line interface (CLI) for handling Diaryx-formatted files"
-repository = "https://github.com/adammharris/diaryx-cli/tree/main" # update later
+description = "Command-line interface (CLI) for handling Diaryx-formatted files"
+repository = "https://github.com/adammharris/diaryx-cli/tree/main"
 keywords = ["diaryx", "markdown", "static-site", "cli"]
 categories = ["command-line-utilities", "text-processing"]
 readme = "README.md"

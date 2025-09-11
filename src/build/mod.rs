@@ -39,7 +39,7 @@ pub fn run_build(opts: BuildOptions) -> Result<()> {
     if opts.verbose {
         eprintln!("[build] core build start");
     }
-    let mut artifacts =
+    let artifacts =
         build_site(&entry_str, core_opts, &real_fs).with_context(|| "Core build failed")?;
 
     // (Removed adjust_links_for_nested_layout: core now emits layout-aware links)
@@ -51,17 +51,20 @@ pub fn run_build(opts: BuildOptions) -> Result<()> {
     }
     fs::create_dir_all(&opts.output)
         .with_context(|| format!("Failed creating {}", opts.output.display()))?;
-    fs::create_dir_all(opts.output.join("css"))?;
 
-    fs::write(opts.output.join("css/style.css"), DEFAULT_CSS.as_bytes())
-        .context("Writing CSS failed")?;
+    if !opts.no_default_css {
+        fs::create_dir_all(opts.output.join("css"))?;
+        fs::write(opts.output.join("css/style.css"), DEFAULT_CSS.as_bytes())
+            .context("Writing CSS failed")?;
+    }
 
     // Page writing
     if artifacts.multi_page {
         if opts.flat {
             // Root index becomes index.html, others <slug>.html
             for page in &artifacts.pages {
-                let html_doc = wrap_full_html(page, artifacts.multi_page, opts.flat);
+                let html_doc =
+                    wrap_full_html(page, artifacts.multi_page, opts.flat, !opts.no_default_css);
                 let out_name = &page.file_name; // already computed in core
                 fs::write(opts.output.join(out_name), html_doc)
                     .with_context(|| format!("Failed writing page {}", out_name))?;
@@ -72,7 +75,8 @@ pub fn run_build(opts: BuildOptions) -> Result<()> {
             fs::create_dir_all(&pages_dir)
                 .with_context(|| format!("Failed creating {}", pages_dir.display()))?;
             for page in &artifacts.pages {
-                let html_doc = wrap_full_html(page, artifacts.multi_page, opts.flat);
+                let html_doc =
+                    wrap_full_html(page, artifacts.multi_page, opts.flat, !opts.no_default_css);
                 if page.is_root_index {
                     fs::write(opts.output.join("index.html"), html_doc)
                         .context("Failed writing root index.html")?;
@@ -90,7 +94,7 @@ pub fn run_build(opts: BuildOptions) -> Result<()> {
     } else {
         // Single page => only one page artifact, designated index.html
         let page = artifacts.pages.first().unwrap();
-        let html_doc = wrap_full_html(page, false, opts.flat);
+        let html_doc = wrap_full_html(page, false, opts.flat, !opts.no_default_css);
         fs::write(opts.output.join("index.html"), html_doc)
             .context("Failed writing single index.html")?;
     }
@@ -212,7 +216,7 @@ impl diaryx_core::FileProvider for RealFs {
 
 /// Wrap the core-rendered HTML content inside a full HTML document + metadata header.
 /// This is intentionally minimal; you can later replicate the full rich metadata grid.
-fn wrap_full_html(page: &PageOutput, multi_page: bool, flat: bool) -> String {
+fn wrap_full_html(page: &PageOutput, multi_page: bool, flat: bool, include_css: bool) -> String {
     // Desired minimal layout:
     // 1. Metadata (already HTML from core: page.metadata_html, includes converted markdown links & contents links)
     // 2. Line break (semantic separation via <hr /> or simple margin in CSS)
@@ -224,20 +228,20 @@ fn wrap_full_html(page: &PageOutput, multi_page: bool, flat: bool) -> String {
     out.push_str("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />");
     out.push_str("<title>");
     html_esc_append(&mut out, &page.title);
-    out.push_str("</title><link rel=\"stylesheet\" href=\"");
-    if multi_page && !flat && !page.is_root_index {
-        out.push_str("../css/style.css");
-    } else {
-        out.push_str("css/style.css");
+    out.push_str("</title>");
+    if include_css {
+        out.push_str("<link rel=\"stylesheet\" href=\"");
+        if multi_page && !flat && !page.is_root_index {
+            out.push_str("../css/style.css");
+        } else {
+            out.push_str("css/style.css");
+        }
+        out.push_str("\" />");
     }
-    out.push_str("\" /></head><body>");
-    out.push_str("<header class=\"page-header\">");
+    out.push_str("</head><body>");
+    // Metadata list placed directly under body so it becomes a grid item (no wrapper header)
     out.push_str(&page.metadata_html);
-    // Do not include h1 title before content. title is already in metadata, and many markdown files include a title in the first h1 block.
-    //out.push_str("<h1>");
-    //html_esc_append(&mut out, &page.title);
-    //out.push_str("</h1>");
-    out.push_str("</header><main class=\"content\">");
+    out.push_str("<main class=\"content\">");
     out.push_str(&page.html);
     out.push_str("</main></body></html>");
     out
@@ -256,107 +260,9 @@ fn html_esc_append(out: &mut String, s: &str) {
     }
 }
 
-// (Removed: render_frontmatter_list – now using core metadata_html)
-
-// (Removed: convert_markdown_links_inline & pretty_timestamp – handled in core)
-
-/// Inline YAML value rendering (previous implementation).
-// (Removed: yaml_value_inline – metadata formatting done in core)
-
-/// Escape text nodes.
-// (Removed: html_escape_text / html_escape_attr – no longer needed in CLI layer)
-
 /// Convert a YAML value into a concise single-line string.
 
 // Helper adapter for closure capturing
-fn out_by_ref<'a>(s: &'a mut String) -> &'a mut String {
-    s
-}
 
 // Simplified CSS (subset of earlier styling). Extend as needed.
-const DEFAULT_CSS: &str = r#"
-:root {
-  --bg: #ffffff;
-  --fg: #1d1f21;
-  --accent: #0a6d3d;
-  --border: #e2e2e2;
-  --code-bg: #f5f5f5;
-  color-scheme: light;
-  font-size: 16px;
-}
-
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;
-  background: var(--bg);
-  color: var(--fg);
-  line-height: 1.55;
-  padding: 0 1.2rem 2.5rem;
-  max-width: 64rem;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-
-header.page-header {
-  border-bottom: 1px solid var(--border);
-  padding: 1.4rem 0 .75rem;
-  margin-bottom: 1rem;
-}
-
-h1 {
-  font-size: 1.9rem;
-  margin: 0 0 .8rem;
-  line-height: 1.2;
-}
-
-
-
-.content img {
-  max-width: 100%;
-  height: auto;
-}
-
-code, pre {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  background: var(--code-bg);
-  font-size: .9rem;
-}
-
-pre {
-  padding: .75rem;
-  overflow: auto;
-  border-radius: 4px;
-}
-
-table {
-  border-collapse: collapse;
-  margin: 1rem 0;
-  width: 100%;
-  font-size: .9rem;
-}
-
-table th, table td {
-  border: 1px solid var(--border);
-  padding: .4rem .6rem;
-  text-align: left;
-  vertical-align: top;
-}
-
-blockquote {
-  margin: 1rem 0;
-  padding: .5rem 1rem;
-  border-left: 4px solid var(--accent);
-  background: #f6fcf9;
-}
-
-hr {
-  border: 0;
-  border-top: 1px solid var(--border);
-  margin: 2rem 0;
-}
-"#;
+const DEFAULT_CSS: &str = include_str!("default.css");

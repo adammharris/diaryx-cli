@@ -32,7 +32,7 @@ use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
 pub use serde_yaml::Value as YamlValue;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use time::{OffsetDateTime, UtcOffset};
 
 // -------------------------------------------------------------------------------------------------
@@ -126,7 +126,7 @@ pub fn build_site(
 
     // 3. Filter by visibility (always keep entry)
     let entry_abs = entry.to_string();
-    let entry_slug = docs
+    let _ = docs
         .iter()
         .find(|d| d.abs_path == entry_abs)
         .map(|d| d.id.clone())
@@ -223,6 +223,7 @@ struct FrontmatterRaw {
     tags: Option<Vec<String>>,
     aliases: Option<Vec<String>>,
     this_file_is_root_index: Option<bool>,
+    reachable: Option<bool>,
     // Additional fields ignored for now
 }
 
@@ -232,7 +233,9 @@ struct Doc {
     abs_path: String,
     title: String,
     visibility: Vec<String>,
+    #[allow(dead_code)]
     tags: Vec<String>,
+    #[allow(dead_code)]
     aliases: Vec<String>,
     is_root_index: bool,
     is_index: bool,
@@ -245,6 +248,7 @@ struct Doc {
     html: String,
     frontmatter: serde_yaml::Value,
     warnings: Vec<String>,
+    #[allow(dead_code)]
     body_md: String,
 }
 
@@ -260,7 +264,7 @@ impl Doc {
 
 fn collect_documents(
     entry: &str,
-    opts: &CoreBuildOptions,
+    _opts: &CoreBuildOptions,
     fs: &impl FileProvider,
     warnings_global: &mut Vec<String>,
 ) -> Result<Vec<Doc>> {
@@ -466,6 +470,9 @@ fn check_required(fm: &FrontmatterRaw, warnings: &mut Vec<String>, path: &str) {
     if fm.format.is_none() {
         warnings.push(format!("Missing required field: format ({path})"));
     }
+    if fm.reachable.is_none() {
+        warnings.push(format!("Missing required field: reachable ({path})"));
+    }
 }
 
 fn parse_part_of(value: &Option<serde_yaml::Value>) -> Vec<String> {
@@ -545,7 +552,7 @@ fn link_graph(docs: &mut [Doc], fs: &impl FileProvider) {
         }
         let parent_dir = fs.parent(&docs[i].abs_path).unwrap_or_default();
         for raw in docs[i].contents_raw.clone() {
-            if let Some((alias, target)) = extract_md_link_parts_raw(&raw) {
+            if let Some((alias, _target)) = extract_md_link_parts_raw(&raw) {
                 if alias.is_empty() {
                     continue;
                 }
@@ -567,7 +574,7 @@ fn link_graph(docs: &mut [Doc], fs: &impl FileProvider) {
         }
         let parent_dir = fs.parent(&docs[i].abs_path).unwrap_or_default();
         for raw in docs[i].raw_part_of.clone() {
-            if let Some((alias, target)) = extract_md_link_parts_raw(&raw) {
+            if let Some((alias, _target)) = extract_md_link_parts_raw(&raw) {
                 if alias.is_empty() {
                     continue;
                 }
@@ -777,6 +784,22 @@ fn build_metadata_html(
     for (k, v) in mapping {
         if let Value::String(s) = k {
             ordered.push((s, v));
+        }
+    }
+
+    // Ensure 'reachable' renders last regardless of YAML insertion order
+    {
+        let mut reachable_entry: Option<(&String, &Value)> = None;
+        ordered.retain(|(k, v)| {
+            if *k == "reachable" {
+                reachable_entry = Some((*k, *v));
+                false
+            } else {
+                true
+            }
+        });
+        if let Some(r) = reachable_entry {
+            ordered.push(r);
         }
     }
 

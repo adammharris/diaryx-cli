@@ -2,15 +2,16 @@
 title: diaryx-cli
 author: Adam Harris
 created: 2025-09-08T12:00:00-6:00
-updated: 2025-09-08T13:07:013-6:00
+updated: 2025-09-10T22:20:00-6:00
 visibility: public
 format: "[CommonMark (Markdown)](https://spec.commonmark.org/0.31.2/)"
+reachable: "[diaryx-cli git repo](https://github.com/adammharris/diaryx-cli)"
 version: v0.2.0-alpha
 ---
 
 # diaryx-cli
 
-`diaryx-cli` is a Rust command‑line tool for turning Diaryx-formatted Markdown files into a small static HTML site.  
+`diaryx-cli` is a Rust command‑line tool for turning Diaryx-formatted Markdown files into a small static HTML site.
 It works on a *single entry file* (a Diaryx file). If that file is a **root index** (`this_file_is_root_index: true`), it recursively traverses the `contents` lists of index files it references to build a multi-page site. Otherwise it produces a single-page site for just that file (plus its local attachments).
 
 This is an early MVP focusing on the `build` subcommand. Additional subcommands (like `import`, `validate`, and `watch`) can be layered in later.
@@ -164,8 +165,8 @@ Future:
 
 ## Security / Privacy Considerations
 
-Default exclusion of non-public items helps avoid accidental publishing.  
-When you use `--include-nonpublic`, you accept responsibility for ensuring sensitive content is safe to publish.  
+Default exclusion of non-public items helps avoid accidental publishing.
+When you use `--include-nonpublic`, you accept responsibility for ensuring sensitive content is safe to publish.
 Future redaction features will allow selective removal (e.g., health metrics, coordinates).
 
 ---
@@ -260,20 +261,20 @@ Coding guidelines:
 
 ## License
 
-The CLI source code (unless stated otherwise) is released under the license declared in `Cargo.toml` (currently MIT — may revisit for code vs. spec text separation).  
+The CLI source code (unless stated otherwise) is released under the license declared in `Cargo.toml` (currently MIT — may revisit for code vs. spec text separation).
 The Diaryx specification text it processes may have its own license declared via the `copying` field; the tool does not alter or remove those notices—ensure compliance when publishing.
 
 ---
 
 ## FAQ
 
-Q: Why default to excluding non-public content?  
+Q: Why default to excluding non-public content?
 A: To prevent accidental leaking of private journaling content. Inclusion becomes a deliberate action via `--include-nonpublic`.
 
-Q: Does it validate the full Diaryx spec now?  
+Q: Does it validate the full Diaryx spec now?
 A: Not yet. Only presence of basic required fields triggers warnings. A future `validate` subcommand + JSON Schema enforcement will tighten this.
 
-Q: Why start with a simplistic template instead of a templating engine?  
+Q: Why start with a simplistic template instead of a templating engine?
 A: Fast bootstrap; once the data model stabilizes we can swap to a template engine (e.g. MiniJinja) without breaking user workflows.
 
 ---

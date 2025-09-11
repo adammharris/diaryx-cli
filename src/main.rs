@@ -68,6 +68,10 @@ struct BuildArgs {
     /// Treat warnings as errors (fail the build if any warning occurs).
     #[arg(long)]
     strict: bool,
+
+    /// Do not emit the bundled default CSS file (style.css). Use when providing custom styling.
+    #[arg(long)]
+    no_default_css: bool,
 }
 
 /// Public-facing build options passed to the build layer.
@@ -81,6 +85,7 @@ pub struct BuildOptions {
     pub flat: bool,
     pub verbose: bool,
     pub strict: bool,
+    pub no_default_css: bool,
 }
 
 impl BuildOptions {
@@ -102,6 +107,7 @@ impl BuildOptions {
             flat: a.flat,
             verbose: a.verbose,
             strict: a.strict,
+            no_default_css: a.no_default_css,
         })
     }
 }
@@ -129,12 +135,13 @@ fn main() -> Result<()> {
             let opts = BuildOptions::from_args(&args)?;
             if opts.verbose {
                 eprintln!(
-                    "[diaryx] Building site\n  input: {}\n  output: {}\n  include_nonpublic: {}\n  emit_json: {}\n  flat: {}\n  strict: {}",
+                    "[diaryx] Building site\n  input: {}\n  output: {}\n  include_nonpublic: {}\n  emit_json: {}\n  flat: {}\n  no_default_css: {}\n  strict: {}",
                     opts.input.display(),
                     opts.output.display(),
                     opts.include_nonpublic,
                     opts.emit_json,
                     opts.flat,
+                    opts.no_default_css,
                     opts.strict
                 );
             }
