@@ -223,7 +223,7 @@ struct FrontmatterRaw {
     tags: Option<Vec<String>>,
     aliases: Option<Vec<String>>,
     this_file_is_root_index: Option<bool>,
-    reachable: Option<bool>,
+    reachable: Option<serde_yaml::Value>,
     // Additional fields ignored for now
 }
 
@@ -470,7 +470,15 @@ fn check_required(fm: &FrontmatterRaw, warnings: &mut Vec<String>, path: &str) {
     if fm.format.is_none() {
         warnings.push(format!("Missing required field: format ({path})"));
     }
-    if fm.reachable.is_none() {
+    // reachable: required, but can be any non-empty scalar, sequence, or mapping value.
+    // Treat missing, null, empty string, or empty sequence as "missing".
+    if match &fm.reachable {
+        None => true,
+        Some(serde_yaml::Value::Null) => true,
+        Some(serde_yaml::Value::String(s)) => s.trim().is_empty(),
+        Some(serde_yaml::Value::Sequence(seq)) => seq.is_empty(),
+        _ => false,
+    } {
         warnings.push(format!("Missing required field: reachable ({path})"));
     }
 }
