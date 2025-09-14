@@ -151,6 +151,149 @@ pub fn build_site(
     let multi_page = docs.iter().any(|d| d.is_root_index) && docs.len() > 1;
     let root_slug = docs.iter().find(|d| d.is_root_index).map(|d| d.id.clone());
 
+    // 5b. Attachment/resource discovery & rewriting (non-.md relative links)
+    // This scans each rendered HTML body for src/href attributes pointing to relative,
+    // non-.md files (images, PDFs, etc.), assigns them a unique target under assets/,
+    // rewrites the HTML to point there (adjusting for nested layout), and produces an
+    // attachment copy plan.
+    let attachments = {
+        use once_cell::sync::Lazy;
+        use regex::Regex;
+        static RES_REF: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r#"(?i)(src|href)="([^"]+)""#).unwrap());
+        use std::collections::{HashMap, HashSet};
+        let mut source_to_target: HashMap<String, String> = HashMap::new();
+        let mut used_names: HashSet<String> = HashSet::new();
+
+        for doc in docs.iter_mut() {
+            // Fast skip if no candidate attributes
+            if !doc.html.contains("src=\"") && !doc.html.contains("href=\"") {
+                continue;
+            }
+            let parent_dir = std::path::Path::new(&doc.abs_path)
+                .parent()
+                .unwrap_or(std::path::Path::new(""));
+
+            let mut new_html = String::with_capacity(doc.html.len());
+            let mut last = 0;
+
+            for cap in RES_REF.captures_iter(&doc.html) {
+                let m = cap.get(0).unwrap();
+                let attr_name = cap.get(1).unwrap().as_str();
+                let val = cap.get(2).unwrap().as_str();
+
+                // Write portion before this attribute match
+                new_html.push_str(&doc.html[last..m.start()]);
+
+                // Filter out values we do NOT treat as attachments
+                if val.is_empty()
+                    || val.starts_with('#')
+                    || val.starts_with('/')
+                    || val.starts_with("data:")
+                    || val.starts_with("mailto:")
+                    || val.contains("://")
+                {
+                    new_html.push_str(m.as_str());
+                    last = m.end();
+                    continue;
+                }
+
+                // Strip query / fragment for resolution, retain original for replacement basis
+                let core_val = val.split(|c| c == '?' || c == '#').next().unwrap_or(val);
+                let lower = core_val.to_ascii_lowercase();
+                if lower.ends_with(".md") {
+                    // Skip markdown page links (already handled by internal link rewriting)
+                    new_html.push_str(m.as_str());
+                    last = m.end();
+                    continue;
+                }
+
+                // Decode simple %20 for filesystem lookup
+                let decoded = core_val.replace("%20", " ");
+                let abs_path_buf = parent_dir.join(&decoded);
+                let abs_path_string = abs_path_buf.to_string_lossy().to_string();
+
+                if !abs_path_buf.exists() {
+                    doc.warnings
+                        .push(format!("Attachment not found: {}", abs_path_string));
+                    new_html.push_str(m.as_str());
+                    last = m.end();
+                    continue;
+                }
+                if abs_path_buf.is_dir() {
+                    doc.warnings.push(format!(
+                        "Attachment path is directory (skipped): {}",
+                        abs_path_string
+                    ));
+                    new_html.push_str(m.as_str());
+                    last = m.end();
+                    continue;
+                }
+
+                // Map / reuse target
+                let target_rel = if let Some(existing) = source_to_target.get(&abs_path_string) {
+                    existing.clone()
+                } else {
+                    // Assign new unique name under assets/
+                    let mut base_name = abs_path_buf
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("attachment")
+                        .to_string();
+
+                    if !used_names.insert(base_name.clone()) {
+                        // Collision: append -N before extension
+                        let (stem, ext) = if let Some((s, e)) = base_name.rsplit_once('.') {
+                            (s.to_string(), format!(".{}", e))
+                        } else {
+                            (base_name.clone(), "".to_string())
+                        };
+                        let mut counter = 1;
+                        loop {
+                            let candidate = format!("{}-{}{}", stem, counter, ext);
+                            if used_names.insert(candidate.clone()) {
+                                base_name = candidate;
+                                break;
+                            }
+                            counter += 1;
+                        }
+                    }
+                    let rel = format!("assets/{}", base_name);
+                    source_to_target.insert(abs_path_string.clone(), rel.clone());
+                    rel
+                };
+
+                // Compute path relative to page output location
+                let mut final_path = target_rel.clone();
+                if multi_page && !opts.flat && !doc.is_root_index {
+                    // child page lives under pages/
+                    final_path = format!("../{}", final_path);
+                }
+                // Re-encode spaces minimally (only spaces)
+                let encoded = final_path.replace(' ', "%20");
+
+                // Emit rewritten attribute
+                new_html.push_str(attr_name);
+                new_html.push_str("=\"");
+                new_html.push_str(&encoded);
+                new_html.push('"');
+
+                last = m.end();
+            }
+            // Tail
+            new_html.push_str(&doc.html[last..]);
+            doc.html = new_html;
+        }
+
+        // Convert mapping to plan
+        let mut plan: Vec<AttachmentPlanEntry> = source_to_target
+            .into_iter()
+            .map(|(source, target)| AttachmentPlanEntry { source, target })
+            .collect();
+        plan.sort_by(|a, b| a.target.cmp(&b.target));
+        plan
+    };
+
     // 6. Produce PageOutput
     let mut all_pages = Vec::new();
     let mut aggregated: Vec<String> = warnings_global.clone();
@@ -196,7 +339,7 @@ pub fn build_site(
 
     Ok(BuildArtifacts {
         pages: all_pages,
-        attachments: Vec::new(), // future
+        attachments,
         warnings: aggregated,
         multi_page,
         root_slug,

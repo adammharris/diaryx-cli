@@ -15,12 +15,13 @@ use crate::BuildOptions;
 ///
 /// High-level steps:
 /// 1. Invoke `diaryx_core::build_site` with a filesystem shim.
-/// 2. Adjust internal links for directory layout differences (multi-page nested vs flat).
+/// 2. (Core already rewrites internal .md links and resource paths.)
 /// 3. Wrap raw HTML bodies in a full document shell (metadata rows minimal for now).
 /// 4. Emit pages to disk (respecting flat vs nested).
-/// 5. Optionally emit a JSON model.
-/// 6. Enforce `--strict` (treat warnings as errors).
-/// 7. Print a completion line (always) including warning count.
+/// 5. Copy attachment assets (non-.md relative resources) planned by core into output/assets/ (or equivalent).
+/// 6. Optionally emit a JSON model.
+/// 7. Enforce `--strict` (treat warnings as errors).
+/// 8. Print a completion line (always) including warning count.
 pub fn run_build(opts: BuildOptions) -> Result<()> {
     let real_fs = RealFs;
     let entry_str = opts
@@ -39,7 +40,7 @@ pub fn run_build(opts: BuildOptions) -> Result<()> {
     if opts.verbose {
         eprintln!("[build] core build start");
     }
-    let artifacts =
+    let mut artifacts =
         build_site(&entry_str, core_opts, &real_fs).with_context(|| "Core build failed")?;
 
     // (Removed adjust_links_for_nested_layout: core now emits layout-aware links)
@@ -97,6 +98,54 @@ pub fn run_build(opts: BuildOptions) -> Result<()> {
         let html_doc = wrap_full_html(page, false, opts.flat, !opts.no_default_css);
         fs::write(opts.output.join("index.html"), html_doc)
             .context("Failed writing single index.html")?;
+    }
+
+    // Attachment asset copying (core produced a copy plan with rewritten HTML already)
+    if !artifacts.attachments.is_empty() {
+        let mut copied = 0usize;
+        for att in &artifacts.attachments {
+            let target_path = opts.output.join(&att.target);
+            if let Some(parent) = target_path.parent() {
+                if let Err(e) = fs::create_dir_all(parent) {
+                    artifacts.warnings.push(format!(
+                        "Failed to create asset directory for '{}': {e}",
+                        target_path.display()
+                    ));
+                    continue;
+                }
+            }
+            match fs::copy(&att.source, &target_path) {
+                Ok(_) => {
+                    copied += 1;
+                    if opts.verbose {
+                        eprintln!(
+                            "[asset] {} -> {}",
+                            att.source,
+                            target_path
+                                .strip_prefix(&opts.output)
+                                .unwrap_or(&target_path)
+                                .display()
+                        );
+                    }
+                }
+                Err(e) => {
+                    artifacts.warnings.push(format!(
+                        "Failed to copy attachment '{}' -> '{}': {e}",
+                        att.source,
+                        target_path.display()
+                    ));
+                }
+            }
+        }
+        if opts.verbose {
+            eprintln!(
+                "[build] attachment copy complete ({} planned, {} copied)",
+                artifacts.attachments.len(),
+                copied
+            );
+        }
+    } else if opts.verbose {
+        eprintln!("[build] no attachments to copy");
     }
 
     // Optional JSON model

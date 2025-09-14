@@ -6,7 +6,7 @@ updated: 2025-09-10T22:20:00-6:00
 visibility: public
 format: "[CommonMark (Markdown)](https://spec.commonmark.org/0.31.2/)"
 reachable: "[diaryx-cli git repo](https://github.com/adammharris/diaryx-cli)"
-version: v0.2.0-alpha
+version: v0.4.0-alpha
 ---
 
 # diaryx-cli
