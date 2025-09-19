@@ -201,8 +201,8 @@ pub fn build_site(
                 // Strip query / fragment for resolution, retain original for replacement basis
                 let core_val = val.split(|c| c == '?' || c == '#').next().unwrap_or(val);
                 let lower = core_val.to_ascii_lowercase();
-                if lower.ends_with(".md") {
-                    // Skip markdown page links (already handled by internal link rewriting)
+                if lower.ends_with(".md") || lower.ends_with(".html") || lower.ends_with(".htm") {
+                    // Skip site page links (.md rewritten, and generated .html/.htm pages)
                     new_html.push_str(m.as_str());
                     last = m.end();
                     continue;
@@ -449,10 +449,31 @@ fn collect_documents(
             }
         };
 
-        let split =
-            split_frontmatter(&raw).with_context(|| format!("Split frontmatter failed: {path}"))?;
-        let (fm_val, fm_struct) = parse_frontmatter(&split.frontmatter_yaml)?;
         let mut doc_warnings = Vec::new();
+        let split = match split_frontmatter(&raw) {
+            Ok(s) => s,
+            Err(e) => {
+                doc_warnings.push(format!("Unterminated YAML frontmatter block ({path}): {e}"));
+                SplitFrontmatter {
+                    frontmatter_yaml: None,
+                    body_md: raw.to_string(),
+                }
+            }
+        };
+        let (fm_val, fm_struct, fm_warns) = match parse_frontmatter(&split.frontmatter_yaml) {
+            Ok(v) => v,
+            Err(e) => {
+                doc_warnings.push(format!("Invalid YAML frontmatter: {} ({path})", e));
+                (
+                    serde_yaml::Value::Null,
+                    FrontmatterRaw::default(),
+                    Vec::new(),
+                )
+            }
+        };
+        for w in fm_warns {
+            doc_warnings.push(format!("{} ({path})", w));
+        }
         check_required(&fm_struct, &mut doc_warnings, &path);
 
         let title = fm_struct
@@ -580,17 +601,37 @@ fn split_frontmatter(raw: &str) -> Result<SplitFrontmatter> {
     })
 }
 
-fn parse_frontmatter(yaml_opt: &Option<String>) -> Result<(serde_yaml::Value, FrontmatterRaw)> {
+fn parse_frontmatter(
+    yaml_opt: &Option<String>,
+) -> Result<(serde_yaml::Value, FrontmatterRaw, Vec<String>)> {
     if let Some(yaml) = yaml_opt {
         if yaml.trim().is_empty() {
-            return Ok((serde_yaml::Value::Null, FrontmatterRaw::default()));
+            return Ok((
+                serde_yaml::Value::Null,
+                FrontmatterRaw::default(),
+                Vec::new(),
+            ));
         }
         let value: serde_yaml::Value =
             serde_yaml::from_str(yaml).context("Invalid YAML frontmatter")?;
-        let fm_struct: FrontmatterRaw = serde_yaml::from_value(value.clone()).unwrap_or_default();
-        Ok((value, fm_struct))
+        let mut warnings = Vec::new();
+        let fm_struct: FrontmatterRaw = match serde_yaml::from_value(value.clone()) {
+            Ok(v) => v,
+            Err(e) => {
+                warnings.push(format!(
+                    "Frontmatter shape mismatch; defaults applied: {}",
+                    e
+                ));
+                FrontmatterRaw::default()
+            }
+        };
+        Ok((value, fm_struct, warnings))
     } else {
-        Ok((serde_yaml::Value::Null, FrontmatterRaw::default()))
+        Ok((
+            serde_yaml::Value::Null,
+            FrontmatterRaw::default(),
+            Vec::new(),
+        ))
     }
 }
 
@@ -623,6 +664,35 @@ fn check_required(fm: &FrontmatterRaw, warnings: &mut Vec<String>, path: &str) {
         _ => false,
     } {
         warnings.push(format!("Missing required field: reachable ({path})"));
+    }
+
+    // Type sanity checks
+    if let Some(v) = &fm.author {
+        match v {
+            serde_yaml::Value::String(_) => {}
+            serde_yaml::Value::Sequence(seq) => {
+                if !seq.iter().all(|x| x.as_str().is_some()) {
+                    warnings.push(format!(
+                        "Field 'author' list should contain only strings ({path})"
+                    ));
+                }
+            }
+            other => {
+                let ty = match other {
+                    serde_yaml::Value::Null => "null",
+                    serde_yaml::Value::Bool(_) => "bool",
+                    serde_yaml::Value::Number(_) => "number",
+                    serde_yaml::Value::String(_) => "string",
+                    serde_yaml::Value::Sequence(_) => "list",
+                    serde_yaml::Value::Mapping(_) => "mapping",
+                    serde_yaml::Value::Tagged(_) => "tagged",
+                };
+                warnings.push(format!(
+                    "Field 'author' should be a string or list of strings; got {} ({path})",
+                    ty
+                ));
+            }
+        }
     }
 }
 

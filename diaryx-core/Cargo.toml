@@ -1,6 +1,6 @@
 [package]
 name = "diaryx-core"
-version = "0.2.0-alpha"
+version = "0.2.1-alpha"
 edition = "2024"
 license = "MIT"
 description = "Core library for parsing, traversing, and rendering Diaryx-formatted Markdown into static site artifacts"

@@ -136,7 +136,7 @@ dependencies = [
 
 [[package]]
 name = "diaryx-cli"
-version = "0.4.0-alpha"
+version = "0.4.1-alpha"
 dependencies = [
  "anyhow",
  "clap",
@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "diaryx-core"
-version = "0.2.0-alpha"
+version = "0.2.1-alpha"
 dependencies = [
  "anyhow",
  "markdown",
