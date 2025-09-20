@@ -526,14 +526,14 @@ hr {
 }
 
 /* Images and Media */
-img,
+/*img,
 video,
 iframe {
     max-width: 100%;
     height: auto;
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-sm);
-}
+}*/
 
 .content figure {
     margin: var(--space-xl) 0;
